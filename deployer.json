@@ -1,0 +1,19 @@
+{
+  "name": "deployer",
+  "description": "A utility for deploying Fulcrum instances.",
+  "version": "0.1.1",
+  "webpage": "https://github.com/tolerable-tech/fulcrum_deployer",
+  "metadata_url": "https://s3.amazonaws.com/components.silos.xyz/specs/deployer.json",
+  "image_url": "tolerable/fulcrum_deployer",
+  "discovery_url": "",
+  "dependencies": [],
+  "requires": ["HOSTNAME", "DIGITALOCEAN_APP_ID", "DIGITALOCEAN_SECRET", "SECRET_TOKEN"],
+  "configurables": [
+    {"name": "HOSTNAME", "export_as": "hostname"},
+    {"name": "DIGITALOCEAN_APP_ID"},
+    {"name": "DIGITALOCEAN_SECRET"},
+    {"name": "SECRET_TOKEN", "generable": "true"}],
+  "start_command": "",
+  "provides": ["http"],
+  "publishes": ["PORT:4001", "DOMAIN"]
+}

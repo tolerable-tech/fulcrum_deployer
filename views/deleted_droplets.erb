@@ -1,0 +1,50 @@
+<div class="row">
+  <div class="col-sm-2"></div>
+  <div class="col-sm-8">
+    <div class="jumbotron">
+      <div class="row">
+        <div class="col-sm-5">
+          <h3>It's over, it's done.</h3>
+          <p> Everything is gone.</p>
+        </div>
+        <div class="col-sm-1"></div>
+        <div class="col-sm-2">
+          <img src="http://i.qkme.me/35jsr0.jpg" class="img-responsive" alt="Frodo over and done.">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-sm-2"></div>
+  <div class="col-sm-2">
+    <h3>Here is what we deleted:</h3>
+  </div>
+  <div class="col-sm-3">
+    <h3>Droplets:</h3>
+    <ul>
+      <% info.droplet.each do |(success, drop)| %>
+        <li><%=drop.name %> - <%=success ? '&#x2713;' : '&#x2713;' %></li>
+      <% end %>
+    </ul>
+  </div>
+  <% unless info.floating_ip.empty? %>
+  <div class="col-sm-3">
+    <h3>Floating IPs:</h3>
+    <ul>
+      <% info.floating_ip.each do |(success, ip)| %>
+        <li><%=ip.ip %> - <%=success ? '&#x2713;' : '&#x2713;' %></li>
+      <% end %>
+    </ul>
+  </div>
+  <% end %>
+</div>
+<div class="row">
+  <div class="col-sm-12"> <hr /></div>
+</div>
+<div class="row">
+  <div class="col-sm-2"></div>
+  <div class="col-sm-8">
+    <p>Want to start fresh? <a href='/new'>Go here</a> and <a href="/new"> create a new one</a>.</p>
+  </div>
+</div>

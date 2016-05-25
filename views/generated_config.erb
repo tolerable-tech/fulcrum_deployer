@@ -1,0 +1,83 @@
+<div class="row">
+  <div class="col-md-8">
+    <p>Here's your <code>cloud-config</code></p>
+    <form class="form-horizontal" action="/create" method="POST">
+      <input type="hidden" name="etcd_discovery" value="<%=droplet.settings.discovery_url%>" readonly>
+      <div class="form-group">
+        <label class="col-sm-2 control-label" for="owner_email">Owner Email</label>
+        <div class="col-sm-6">
+          <input type="email" class="form-control" name="owner_email" value="<%=form.owner_email %>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="hostnames" class="col-sm-2 control-label">Hostnames</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="hostnames" value="<%=form.hostnames%>" readonly>
+        </div>
+      </div>
+
+      <% if authenticated_with_do? %>
+      <div class="form-group">
+        <label for="droplet_name" class="col-sm-2 control-label">Droplet Name</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="droplet_name" value="<%=droplet.settings.droplet_name%>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="region" class="col-sm-2 control-label">Region</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="region" value="<%=droplet.settings.region%>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="size" class="col-sm-2 control-label">Size</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="size" value="<%=droplet.settings.size%>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="floating_ip" class="col-sm-2 control-label">Floating IP</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="floating_ip" value="<%=droplet.settings.floating_ip%>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="ssh_key" class="col-sm-2 control-label">SSH Key</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="ssh_key" value="<%=droplet.settings.ssh_keys.join(',')%>" readonly>
+        </div>
+      </div>
+      <% end %>
+
+      <div class="form-group">
+        <label for="aws_id" class="col-sm-2 control-label">AWS Key ID</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="aws_id" value="<%= droplet.settings.aws_id %>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="aws_secret" class="col-sm-2 control-label">AWS Section</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="aws_secret" value="<%=droplet.settings.aws_secret %>" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="aws_region" class="col-sm-2 control-label">AWS Region</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" name="aws_secret" value="<%=droplet.settings.aws_region %>" readonly>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-success">Accept Settings</button>
+    </form>
+  </div>
+</div>
+<div class="row">
+  <hr />
+  <div class="col-md-12">
+    <div class="well well-sm">
+      <pre>
+  <%= droplet.settings.cloud_config %>
+      </pre>
+    </div>
+  </div>
+</div>

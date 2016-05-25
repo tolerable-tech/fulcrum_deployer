@@ -1,0 +1,38 @@
+<div class="row">
+  <div class="col-sm-2"></div>
+  <div class="col-sm-8">
+    <div class="jumbotron">
+      <h3>If you just realized that you did something that is going to cost you real
+    money...no worries!</h3>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-sm-2"></div>
+  <div class="col-sm-8">
+    <p>This will delete all the things we think we created.</p>
+  </div>
+</div>
+<div class="row">
+  <div class="col-sm-2"></div>
+  <div class="col-sm-4">
+    <h4>What are you deleting?</h4>
+    <p>We tag all the droplets we create with <code>fulcrum-deployer</code>, and we
+    are deleting all the things with that tag. .</p>
+    <p>We also use a separate tag for floating ips that you provide vs. ones we generate. So if you provided a floating IP when you configured your instance, we will not delete it.</p>
+  </div>
+  <div class="col-sm-4">
+    <h4>What about my other Digital Ocean content?</h4>
+    <p>We try to be conservative, because the last thing we want is for you to lost content.</p>
+    <p>That said, you're in the "destroy" section. If you have used <code>fulcrum</code> tags for anything else, then you should probably remove things manually from your Digital Ocean dashboard.</p>
+  </div>
+</div>
+<hr />
+<div class="row">
+  <div class="col-sm-3"></div>
+  <div class="col-sm-4">
+    <p><button form="delete-all-form" class="btn btn-danger">Sounds good, arm blasters and FIRE!</button>
+  </div>
+</div>
+<form class="hidden" id="delete-all-form" method="POST" action="/delete">
+</form>

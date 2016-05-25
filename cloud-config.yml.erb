@@ -1,0 +1,322 @@
+#cloud-config
+
+---
+write_files:
+  - path: /var/lib/iptables/rules-save
+    permissions: 640
+    owner: root
+    content: |
+      *nat
+      :PREROUTING ACCEPT [0:0]
+      :INPUT ACCEPT [0:0]
+      :OUTPUT ACCEPT [3:284]
+      :POSTROUTING ACCEPT [3:284]
+      :DOCKER - [0:0]
+      -A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER
+      -A OUTPUT ! -d 127.0.0.0/8 -m addrtype --dst-type LOCAL -j DOCKER
+      -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+      COMMIT
+      *filter
+      :INPUT DROP [0:0]
+      :FORWARD DROP [0:0]
+      :OUTPUT ACCEPT [0:0]
+      :DOCKER - [0:0]
+      -A INPUT -i lo -j ACCEPT
+      -A INPUT -i eth1 -j ACCEPT
+      -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+      -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT
+      -A INPUT -p tcp -m tcp --dport 2222 -j ACCEPT
+      -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
+      -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT
+      -A INPUT -i eth1 -p tcp -s 10.0.0.0/8,172.18.0.0/16,127.0.0.1 --dport 4001 -j ACCEPT
+      -A INPUT -i eth1 -p tcp -s 10.0.0.0/8,172.18.0.0/16,127.0.0.1 --dport 2379 -j ACCEPT
+      -A INPUT -i eth1 -p tcp -s 10.0.0.0/8,172.18.0.0/16,127.0.0.1 --dport 2380 -j ACCEPT
+      -A INPUT -i eth1 -p tcp -s 10.0.0.0/8,172.18.0.0/16,127.0.0.1 --dport 49153 -j ACCEPT
+      -A INPUT -i docker0 -p tcp --dport 4001 -j ACCEPT
+      -A INPUT -i docker0 -p tcp --dport 2379 -j ACCEPT
+      -A INPUT -i docker0 -p tcp --dport 2375 -j ACCEPT
+      -A INPUT -i docker0 -p tcp --dport 2380 -j ACCEPT
+      -A INPUT -i docker0 -p tcp --dport 49153 -j ACCEPT
+      -A INPUT -i fulcrum0 -p tcp --dport 4001 -j ACCEPT
+      -A INPUT -i fulcrum0 -p tcp --dport 2375 -j ACCEPT
+      -A INPUT -i fulcrum0 -p tcp --dport 2379 -j ACCEPT
+      -A INPUT -i fulcrum0 -p tcp --dport 2380 -j ACCEPT
+      -A INPUT -i fulcrum0 -p tcp --dport 49153 -j ACCEPT
+      -A INPUT -i fulcrum1 -p tcp -m tcp --dport 80 -j ACCEPT
+      -A INPUT -i fulcrum1 -p tcp -m tcp --dport 443 -j ACCEPT
+      -A INPUT -i fulcrum1 -p tcp --dport 2375 -j ACCEPT
+      -A INPUT -i fulcrum1 -p tcp --dport 2379 -j ACCEPT
+      -A INPUT -p icmp -m icmp --icmp-type 0 -j ACCEPT
+      -A INPUT -p icmp -m icmp --icmp-type 3 -j ACCEPT
+      -A INPUT -p icmp -m icmp --icmp-type 11 -j ACCEPT
+      -A FORWARD -o docker0 -j DOCKER
+      -A FORWARD -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+      -A FORWARD -i docker0 ! -o docker0 -j ACCEPT
+      -A FORWARD -i docker0 -o docker0 -j ACCEPT
+      COMMIT
+
+  - path: /etc/sysctl.d/swap.conf
+    permissions: 420
+    owner: root
+    content: |
+      vm.swappiness=10
+      vm.vfs_cache_pressure=50
+  - path: /etc/ssh/sshd_config
+    permissions: 600
+    owner: root:root
+    content: |
+      # Use most defaults for sshd configuration.
+      UsePrivilegeSeparation sandbox
+      Subsystem sftp internal-sftp
+
+      PermitRootLogin no
+      AllowUsers core
+      PasswordAuthentication no
+      ChallengeResponseAuthentication no
+  - path: /home/core/fulcrum/fulcrum-initializer
+    permissions: 775
+    owner: root:wheel
+    content: |
+<%= fulcrum_initializer %>
+  - path: /home/core/fulcrum/fulcrum
+    permissions: 775
+    owner: root:wheel
+    content: |
+<%= fulcrum_run_file %>
+
+coreos:
+  update:
+    reboot-strategy: 'off'
+  fleet:
+    public-ip: $public_ipv4
+  flannel:
+    interface: $public_ipv4
+  units:
+  - name: etcd2.service
+    command: start
+    drop-ins:
+      - name: 1-setup_envs.conf
+        content: |
+          [Service]
+          EnvironmentFile=/etc/environment
+          Environment="ETCD_ADVERTISE_CLIENT_URLS=http://$private_ipv4:2379"
+          Environment="ETCD_DISCOVERY=<%=discovery_url%>"
+          Environment="ETCD_INITIAL_ADVERTISE_PEER_URLS=http://$private_ipv4:2380"
+          Environment="ETCD_LISTEN_CLIENT_URLS=http://$private_ipv4:2379,http://127.0.0.1:2379"
+          Environment="ETCD_LISTEN_PEER_URLS=http://$private_ipv4:2380,http://$private_ipv4:7001"
+
+  - name: fleet.service
+    command: start
+  - name: iptables-restore.service
+    enable: true
+  - name: iptables-store.service
+    enable: true
+  - name: fleet.socket
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Fleet API Socket
+      PartOf=fleet.service
+
+      [Socket]
+      ListenStream=/var/run/fleet.sock
+      ListenStream=0.0.0.0:49153
+  - name: docker-tcp.socket
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Docker Socket for the API
+
+      [Socket]
+      ListenStream=2375
+      Service=docker.service
+      BindIPv6Only=both
+
+      [Install]
+      WantedBy=sockets.target
+  - name: sshd.socket
+    command: restart
+    content: |
+      [Socket]
+      ListenStream=2222
+      Accept=yes
+  - name: nginx_lb.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Nginx load balancer for web server backends
+
+      # Requirements
+      Requires=docker.service
+
+      # Dependency ordering
+      After=docker.service
+      After=etcd2.service
+      After=iptables-restore.service
+
+      [Service]
+      User=core
+      # Let the process take awhile to start up (for first run Docker containers)
+      TimeoutStartSec=0
+
+      # Change killmode from "control-group" to "none" to let Docker remove
+      # work correctly.
+      KillMode=none
+
+      # Get CoreOS environmental variables
+      EnvironmentFile=/etc/environment
+
+      Environment="SERVICE_NAME=nginx_lb"
+      Environment="SERVICE_IMAGE_URL=tolerable/nginx_confd:<%=nginx_confd_version%>"
+      Environment="TOP_DOMAIN=<%=top_domain%>"
+      Environment="OTHER_DOMAINS=<%=other_domains%>"
+
+      ExecStartPre=/usr/bin/sudo /usr/bin/chown root:wheel /home/core/fulcrum
+      ExecStartPre=/usr/bin/sudo /usr/bin/chmod g+w /home/core/fulcrum
+      ExecStartPre=/home/core/fulcrum/fulcrum-initializer nginx-preflight
+      ExecStartPre=-/usr/bin/docker rm $SERVICE_NAME
+      ExecStartPre=/usr/bin/docker pull $SERVICE_IMAGE_URL
+      ExecStartPre=/usr/bin/systemctl is-active etcd2
+      ExecStartPre=/usr/bin/cp /home/core/fulcrum/fulcrum /home/core/fulcrum/fulcrum-nginx
+      ExecStartPre=/usr/bin/etcdctl set /le/top ${TOP_DOMAIN}
+      ExecStartPre=/usr/bin/etcdctl set /le/others ${OTHER_DOMAINS}
+      ExecStartPre=/usr/bin/curl "http://${COREOS_PRIVATE_IPV4}:2379/v2/keys/le/certsexist?prevExist=false" -XPUT -d value=false
+      ExecStartPre=/usr/bin/curl "http://${COREOS_PRIVATE_IPV4}:2379/v2/keys/le/enabled?prevExist=false" -XPUT -d value=false
+      ExecStartPre=/usr/bin/curl "http://${COREOS_PRIVATE_IPV4}:2379/v2/keys/le/expiring?prevExist=false" -XPUT -d value=boot
+      ExecStartPre=-/usr/bin/etcdctl mkdir /apps
+      ExecStartPre=/usr/bin/etcdctl set /le/stage true
+
+      ExecStart=/home/core/fulcrum/fulcrum-nginx run $SERVICE_NAME $SERVICE_IMAGE_URL \
+        "HOST_IP=${COREOS_PRIVATE_IPV4}" none "${DO_ANCHOR_IPV4}:80:80,${DO_ANCHOR_IPV4}:443:443" \
+        "letsencrypt:/etc/acme,nginx_conf:/etc/nginx/conf.d" fulcrum-nginx \
+       /usr/local/bin/confd-watch
+
+      ExecStartPost=/home/core/fulcrum/fulcrum-nginx wait-then $SERVICE_NAME \
+        /usr/bin/docker network connect fulcrum-private $SERVICE_NAME
+
+      # Stop
+      ExecStop=/usr/bin/docker stop $SERVICE_NAME
+
+      [Install]
+      WantedBy=multi-user.target
+      #[X-Fleet]
+      #Conflicts=nginx_lb.service
+      #Conflicts=*-app@*.service
+  - name: fulcrum.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Fulcrum
+      After=docker.service
+      After=etcd2.service
+      After=postgresql.service
+      After=docker_networks.service
+      After=iptables-restore.service
+      Requires=docker.service
+      Requires=etcd2.service
+      Requires=docker_networks.service
+      Requires=postgresql.service
+
+      [Service]
+      User=core
+      TimeoutStartSec=0
+      EnvironmentFile=/etc/environment
+      Environment="SERVICE_NAME=fulcrum-app"
+      Environment="PG_CONT=fulcrum_postgresql"
+      Environment="SERVICE_IMAGE_URL=tolerable/fulcrum:<%=fulcrum_app_version%>"
+      Environment="TOP_DOMAIN=<%=top_domain%>"
+      KillMode=none
+
+      ExecStartPre=/usr/bin/sudo /usr/bin/chown root:wheel /home/core/fulcrum
+      ExecStartPre=/usr/bin/sudo /usr/bin/chmod g+w /home/core/fulcrum
+      ExecStartPre=/usr/bin/cp /home/core/fulcrum/fulcrum /home/core/fulcrum/fulcrum-app
+      ExecStartPre=/home/core/fulcrum/fulcrum-app wait-then fulcrum_postgresql echo "postgres is now available"
+      ExecStart=/home/core/fulcrum/fulcrum-app run ${SERVICE_NAME} $SERVICE_IMAGE_URL \
+      "OWNER_EMAIL=<%=owner_email%>,COREOS_PRIVATE_IPV4=${COREOS_PRIVATE_IPV4},TOP_DOMAIN=${TOP_DOMAIN},AWS_ACCESS_KEY_ID=<%=aws_id%>,AWS_SECRET_ACCESS_KEY=<%=aws_secret%>,AWS_REGION=<%=aws_region%>,FULCRUM_DB=<%=postgres_info%>" \
+        none "${COREOS_PRIVATE_IPV4}:4000:4000" none fulcrum-private
+
+      ExecStopPre=/usr/bin/etcdctl rm --recursive /apps/fulcrum
+      ExecStop=/usr/bin/docker stop $SERVICE_NAME
+
+      [Install]
+      WantedBy=multi-user.target
+  - name: postgresql.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=PostgreSQL for the Silo shit bra
+      After=docker.service
+      After=docker_networks.service
+      After=iptables-restore.service
+      Requires=docker.service
+      Requires=docker_networks.service
+
+      [Service]
+      TimeoutStartSec=0
+      EnvironmentFile=/etc/environment
+      Environment="SERVICE_NAME=fulcrum_postgresql"
+      Environment="SERVICE_IMAGE_URL=postgres:9.4"
+      Environment="POSTGRES_DB=<%=postgres_db%>"
+      Environment="POSTGRES_PASSWORD=<%=postgres_password%>"
+      Environment="POSTGRES_USER=<%=postgres_user%>"
+      KillMode=none
+
+      ExecStartPre=/usr/bin/chown root:wheel /home/core/fulcrum
+      ExecStartPre=/usr/bin/chmod g+w /home/core/fulcrum
+      ExecStartPre=/home/core/fulcrum/fulcrum-initializer create-docker-volumes
+      ExecStartPre=/usr/bin/cp /home/core/fulcrum/fulcrum /home/core/fulcrum/fulcrum-pgsql
+      ExecStart=/home/core/fulcrum/fulcrum-pgsql run $SERVICE_NAME $SERVICE_IMAGE_URL \
+          "POSTGRES_DB=${POSTGRES_DB},POSTGRES_PASSWORD=${POSTGRES_PASSWORD},POSTGRES_USER=${POSTGRES_USER}" \
+          none none "fulcrumpgdata:/var/lib/postgresql/data" fulcrum-private
+
+      ExecStop=/usr/bin/docker stop $SERVICE_NAME
+
+      [Install]
+      WantedBy=multi-user.target
+  - name: docker_networks.service
+    command: start
+    enable: true
+    content: |
+      [Unit]
+      Description=Setup Fulcrums docker networks
+      Requires=docker.service
+      After=docker.service
+      After=iptables-restore.service
+      [Service]
+      User=core
+      TimeoutStartSec=0
+      KillMode=none
+      EnvironmentFile=/etc/environment
+      ExecStart=/home/core/fulcrum/fulcrum-initializer docker-network
+  - name: fulcrum-initializer.service
+    command: start
+    runtime: true
+    content: |
+      [Unit]
+      Description=Grab bag of initializer tasks for fulcrum
+
+      Requires=docker.service
+
+      After=docker.service
+      After=iptables-restore.service
+      Before=nginx_lb.service
+      Before=postgresql.service
+
+      [Service]
+      User=core
+      TimeoutStartSec=0
+      #KillMode=none
+      RemainAfterExit=true
+      EnvironmentFile=/etc/environment
+      Type=oneshot
+
+      ExecStart=/home/core/fulcrum/fulcrum-initializer up
+      ExecStop=/home/core/fulcrum/fulcrum-initializer down
+
+      [Install]
+      WantedBy=multi-user.target
